@@ -153,9 +153,33 @@ def trending_manga():
         return jsonify({"success": True, "results": results})
     except Exception as e: return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route('/api/manga/genres', methods=['GET'])
-def get_genres():
-    genres = ["Action", "Adventure", "Comedy", "Drama", "Ecchi", "Fantasy", "Gender Bender", "Harem", "Historical", "Horror", "Isekai", "Josei", "Martial Arts", "Mature", "Mecha", "Mystery", "Psychological", "Romance", "School Life", "Sci-fi", "Seinen", "Shoujo", "Shoujo Ai", "Shounen", "Shounen Ai", "Slice of Life", "Smut", "Sports", "Supernatural", "Tragedy", "Webtoon"]
-    return jsonify({"success": True, "genres": genres})
+@app.route('/api/manga/chapters', methods=['GET'])
+def fetch_chapters():
+    manga_name = request.args.get('name')
+    if not manga_name: return jsonify({"error": "Manga name is required"}), 400
+    try:
+        links = getChapters(manga_name, 1, 5000)
+        chapters = []
+        for link in links:
+            # Extract chapter number more robustly
+            parts = link.strip('/').split('/')
+            slug = parts[-1]
+            num_match = re.search(r'chapter-(\d+(\.\d+)?)', slug)
+            num = num_match.group(1) if num_match else slug.replace('chapter-', '')
+            chapters.append({"number": num, "url": link})
+        
+        # We want Story-Wise order: [Ch 1, Ch 2, Ch 3...]
+        # getChapters already reverses it, so we are good.
+        return jsonify({"success": True, "manga": manga_name, "chapters": chapters})
+    except Exception as e: return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/manga/images', methods=['GET'])
+def fetch_images():
+    chapter_url = request.args.get('url')
+    if not chapter_url: return jsonify({"error": "Chapter URL is required"}), 400
+    try:
+        img_urls = scrape_img(chapter_url)
+        return jsonify({"success": True, "images": img_urls})
+    except Exception as e: return jsonify({"success": False, "error": str(e)}), 500
 
 app = app
