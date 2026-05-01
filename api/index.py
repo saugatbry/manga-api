@@ -42,17 +42,30 @@ def latest_manga():
         response = session.get(url, timeout=15)
         soup = BeautifulSoup(response.text, 'html.parser')
         results = []
-        items = soup.find_all('div', class_='page-item-detail')
+        
+        # Combined selector for homepage and search results
+        items = soup.select('div.page-item-detail, div.c-tabs-item__content')
         if not items: items = soup.select('div.manga-item')
 
         for item in items:
-            title_link = item.select_one('.post-title a, h3 a, h5 a')
+            title_link = item.select_one('.post-title a, h3 a, h4 a, h5 a')
             if not title_link: continue
             
             img_tag = item.find('img')
-            chapter_link = item.select_one('.chapter a, .list-chapter a')
+            chapter_link = item.select_one('.chapter a, .list-chapter a, .latest-chap a')
             time_tag = item.select_one('.post-on, .post-date, .chapter-release-date')
             
+            # Extract type
+            m_type = "Manga"
+            type_badge = item.select_one('.mg-type, .manga-type')
+            if type_badge:
+                m_type = type_badge.text.strip()
+            else:
+                # Fallback: check slug or title for clues
+                slug_text = title_link['href'].lower()
+                if 'manhua' in slug_text: m_type = "Manhua"
+                elif 'manhwa' in slug_text: m_type = "Manhwa"
+
             poster_url = ""
             if img_tag:
                 poster_url = img_tag.get('data-src') or img_tag.get('src') or ""
@@ -63,7 +76,8 @@ def latest_manga():
                 "slug": title_link['href'].strip('/').split('/')[-1],
                 "poster": fix_poster(poster_url),
                 "latest_chapter": chapter_link.text.strip() if chapter_link else "New",
-                "time": time_tag.text.strip() if time_tag else "New"
+                "time": time_tag.text.strip() if time_tag else "New",
+                "type": m_type
             })
         
         seen = set()
@@ -78,26 +92,7 @@ def latest_manga():
 
 @app.route('/api/manga/search', methods=['GET'])
 def search_manga():
-    query = request.args.get('q')
-    if not query: return jsonify({"success": False, "error": "Query is required"}), 400
-    url = f"https://www.mangaread.org/?s={query}&post_type=wp-manga"
-    try:
-        response = session.get(url, timeout=15)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        results = []
-        items = soup.select('div.c-tabs-item__content, div.page-item-detail')
-        for item in items:
-            title_tag = item.select_one('h3 a, h4 a, h5 a')
-            if not title_tag: continue
-            img_tag = item.find('img')
-            results.append({
-                "title": title_tag.text.strip(),
-                "slug": title_tag['href'].strip('/').split('/')[-1],
-                "poster": fix_poster(img_tag.get('src') or img_tag.get('data-src') if img_tag else ""),
-                "latest_chapter": ""
-            })
-        return jsonify({"success": True, "results": results})
-    except Exception as e: return jsonify({"success": False, "error": str(e)}), 500
+    return latest_manga()
 
 @app.route('/api/manga/trending', methods=['GET'])
 def trending_manga():
