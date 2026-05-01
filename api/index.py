@@ -55,19 +55,14 @@ def latest_manga():
             chapter_link = item.select_one('.chapter a, .list-chapter a, .latest-chap a')
             time_tag = item.select_one('.post-on, .post-date, .chapter-release-date')
             
-            # Extract type
+            # Robust type detection
             m_type = "Manga"
-            classes = item.get('class', [])
-            if 'manhwa' in classes: m_type = "Manhwa"
-            elif 'manhua' in classes: m_type = "Manhua"
+            item_html = str(item).lower()
+            if 'manhwa' in item_html: m_type = "Manhwa"
+            elif 'manhua' in item_html: m_type = "Manhua"
             else:
                 type_badge = item.select_one('.mg-type, .manga-type')
-                if type_badge:
-                    m_type = type_badge.text.strip()
-                else:
-                    slug_text = title_link['href'].lower()
-                    if 'manhua' in slug_text: m_type = "Manhua"
-                    elif 'manhwa' in slug_text: m_type = "Manhwa"
+                if type_badge: m_type = type_badge.text.strip()
 
             poster_url = ""
             if img_tag:
