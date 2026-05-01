@@ -79,41 +79,51 @@ def fix_poster(url):
 def latest_manga():
     orderby = request.args.get('orderby', '')
     genre = request.args.get('genre', '')
+    query = request.args.get('q', '')
     
     # Construct target URL
-    if genre:
+    if query:
+        url = f"https://www.mangaread.org/?s={query}&post_type=wp-manga"
+    elif genre:
         url = f"https://www.mangaread.org/manga-genre/{genre}/"
         if orderby: url += f"?m_orderby={orderby}"
     else:
         url = "https://www.mangaread.org/manga/"
         if orderby: url += f"?m_orderby={orderby}"
         
-    headers = {'User-Agent': 'Mozilla/5.0'}
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': 'https://www.mangaread.org/',
+    }
+    
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        response = requests.get(url, headers=headers, timeout=15)
         soup = BeautifulSoup(response.text, 'html.parser')
         results = []
         
         # Determine items based on various possible selectors
-        items = soup.select('div.page-item-detail, div.manga-item, div.badge-pos-1')
+        items = soup.select('div.page-item-detail, div.manga-item, div.badge-pos-1, div.row.listing-item, div.col-6.col-md-3')
         
         if not items:
             # Try finding by class in the main container
-            container = soup.find('div', class_='list-listing') or soup.find('div', class_='site-content')
+            container = soup.find('div', class_='list-listing') or soup.find('div', class_='site-content') or soup.find('div', class_='main-col')
             if container:
-                items = container.find_all('div', recursive=False)
+                items = container.find_all('div', recursive=True)
 
         for item in items:
-            title_tag = item.find('h3') or item.find('h5') or item.find('a', class_='manga-name')
+            title_tag = item.find('h3') or item.find('h5') or item.find('a', class_='manga-name') or item.find('div', class_='post-title')
             if title_tag and title_tag.find('a'): title_tag = title_tag.find('a')
             
             img_tag = item.find('img')
-            chapter_tag = item.find('span', class_='chapter') or item.find('div', class_='chapter-item')
+            chapter_tag = item.find('span', class_='chapter') or item.find('div', class_='chapter-item') or item.find('span', class_='font-meta')
             time_tag = item.find('span', class_='post-on') or item.find('span', class_='post-date')
             
-            if not title_tag or not title_tag.get('href'): continue
+            if not title_tag or not title_tag.get('href') or 'manga' not in title_tag['href']: continue
             
-            poster_url = img_tag.get('data-src') or img_tag.get('src') if img_tag else ""
+            poster_url = img_tag.get('data-src') or img_tag.get('src') or img_tag.get('data-srcset') if img_tag else ""
+            if ' ' in poster_url: poster_url = poster_url.split(' ')[0] # Handle srcset
             
             results.append({
                 "title": title_tag.text.strip(),
@@ -123,15 +133,15 @@ def latest_manga():
                 "time": time_tag.text.strip() if time_tag else ""
             })
         
-        # Deduplicate results by slug
+        # Deduplicate and filter results
         seen = set()
         final_results = []
         for r in results:
-            if r['slug'] not in seen:
+            if r['slug'] not in seen and len(r['slug']) > 2:
                 seen.add(r['slug'])
                 final_results.append(r)
                 
-        return jsonify({"success": True, "results": final_results})
+        return jsonify({"success": True, "results": final_results[:40]})
     except Exception as e: return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/manga/trending', methods=['GET'])
