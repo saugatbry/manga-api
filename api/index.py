@@ -57,14 +57,17 @@ def latest_manga():
             
             # Extract type
             m_type = "Manga"
-            type_badge = item.select_one('.mg-type, .manga-type')
-            if type_badge:
-                m_type = type_badge.text.strip()
+            classes = item.get('class', [])
+            if 'manhwa' in classes: m_type = "Manhwa"
+            elif 'manhua' in classes: m_type = "Manhua"
             else:
-                # Fallback: check slug or title for clues
-                slug_text = title_link['href'].lower()
-                if 'manhua' in slug_text: m_type = "Manhua"
-                elif 'manhwa' in slug_text: m_type = "Manhwa"
+                type_badge = item.select_one('.mg-type, .manga-type')
+                if type_badge:
+                    m_type = type_badge.text.strip()
+                else:
+                    slug_text = title_link['href'].lower()
+                    if 'manhua' in slug_text: m_type = "Manhua"
+                    elif 'manhwa' in slug_text: m_type = "Manhwa"
 
             poster_url = ""
             if img_tag:
