@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv
+env/
+venv/
+bin/
+lib/
+develop-eggs/
+dist/
+downloads/
+manga/
+*.pdf
+
+# Vercel
+.vercel
+
+# Project specific
+downloads/
+_cache/

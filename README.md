@@ -38,5 +38,13 @@ The API will start at `http://localhost:5000`.
 **Example:**
 `http://localhost:5000/api/manga/images?url=https://www.mangaread.org/manga/one-piece/chapter-1/`
 
+## Vercel Deployment
+1. Install the Vercel CLI: `npm i -g vercel`
+2. Navigate to the `manga-api` folder.
+3. Run `vercel`.
+4. Follow the prompts to deploy.
+
+The `vercel.json` and `api/index.py` files are already configured for serverless deployment.
+
 ## Note
-This scraper currently targets `mangaread.org`. Ensure the `name` parameter matches the slug used on that website.
+This scraper targets `mangaread.org`. Ensure the `name` parameter matches the slug used on that website.
