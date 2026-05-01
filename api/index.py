@@ -88,48 +88,68 @@ def latest_manga():
         url = f"https://www.mangaread.org/manga-genre/{genre}/"
         if orderby: url += f"?m_orderby={orderby}"
     else:
-        url = "https://www.mangaread.org/manga/"
-        if orderby: url += f"?m_orderby={orderby}"
+        # If no genre/orderby, go to the MAIN HOMEPAGE for 'Latest Updates'
+        url = "https://www.mangaread.org/"
+        if orderby: 
+            url = "https://www.mangaread.org/manga/"
+            url += f"?m_orderby={orderby}"
         
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
-        'Referer': 'https://www.mangaread.org/',
+        'Referer': 'https://www.google.com/',
+        'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+        'Sec-Ch-Ua-Mobile': '?0',
+        'Sec-Ch-Ua-Platform': '"Windows"',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'cross-site',
+        'Upgrade-Insecure-Requests': '1'
     }
     
     try:
         response = requests.get(url, headers=headers, timeout=15)
+        if response.status_code != 200:
+            return jsonify({"success": False, "error": f"Cloudflare or Provider Blocked (Status {response.status_code})"}), response.status_code
+            
         soup = BeautifulSoup(response.text, 'html.parser')
         results = []
         
-        # Determine items based on various possible selectors
-        items = soup.select('div.page-item-detail, div.manga-item, div.badge-pos-1, div.row.listing-item, div.col-6.col-md-3')
+        # Determine items based on the provided source code (page-item-detail manga)
+        items = soup.select('div.page-item-detail, div.manga-item, div.page-listing-item')
         
         if not items:
-            # Try finding by class in the main container
-            container = soup.find('div', class_='list-listing') or soup.find('div', class_='site-content') or soup.find('div', class_='main-col')
+            # Fallback to finding items inside the loop-content div
+            container = soup.find('div', id='loop-content') or soup.find('div', class_='page-content-listing')
             if container:
-                items = container.find_all('div', recursive=True)
+                items = container.select('div.page-item-detail, div.manga-item')
 
         for item in items:
-            title_tag = item.find('h3') or item.find('h5') or item.find('a', class_='manga-name') or item.find('div', class_='post-title')
-            if title_tag and title_tag.find('a'): title_tag = title_tag.find('a')
+            # Title extraction based on source: <h3 class="h5"><a href="...">Title</a></h3>
+            title_tag = item.select_one('h3 a, h5 a, .post-title a, a.manga-name')
             
+            # Poster extraction: <img src="..." data-src="...">
             img_tag = item.find('img')
-            chapter_tag = item.find('span', class_='chapter') or item.find('div', class_='chapter-item') or item.find('span', class_='font-meta')
-            time_tag = item.find('span', class_='post-on') or item.find('span', class_='post-date')
+            
+            # Chapter extraction: <span class="chapter font-meta"><a href="...">Chapter</a></span>
+            chapter_tag = item.select_one('span.chapter a, .list-chapter .chapter-item a, .chapter-item a')
+            
+            # Time extraction: <span class="post-on font-meta">...</span>
+            time_tag = item.select_one('span.post-on, .post-date, .post-on')
             
             if not title_tag or not title_tag.get('href') or 'manga' not in title_tag['href']: continue
             
+            # Image priority: data-src -> src -> data-srcset
             poster_url = img_tag.get('data-src') or img_tag.get('src') or img_tag.get('data-srcset') if img_tag else ""
-            if ' ' in poster_url: poster_url = poster_url.split(' ')[0] # Handle srcset
+            if poster_url.startswith('//'): poster_url = 'https:' + poster_url
+            if ' ' in poster_url: poster_url = poster_url.split(' ')[0] 
             
             results.append({
                 "title": title_tag.text.strip(),
                 "slug": title_tag['href'].strip('/').split('/')[-1],
                 "poster": fix_poster(poster_url),
-                "latest_chapter": chapter_tag.text.strip() if chapter_tag else "Ch. 1",
+                "latest_chapter": chapter_tag.text.strip() if chapter_tag else "New",
                 "time": time_tag.text.strip() if time_tag else ""
             })
         
