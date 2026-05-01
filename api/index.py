@@ -94,20 +94,26 @@ def latest_manga():
         soup = BeautifulSoup(response.text, 'html.parser')
         results = []
         
-        # Determine items based on page structure
-        items = soup.find_all('div', class_='page-item-detail')
+        # Determine items based on various possible selectors
+        items = soup.select('div.page-item-detail, div.manga-item, div.badge-pos-1')
+        
         if not items:
-            items = soup.find_all('div', class_='manga-item') # Fallback for some genre pages
-            
+            # Try finding by class in the main container
+            container = soup.find('div', class_='list-listing') or soup.find('div', class_='site-content')
+            if container:
+                items = container.find_all('div', recursive=False)
+
         for item in items:
-            title_tag = item.find('h3').find('a') if item.find('h3') else item.find('a')
+            title_tag = item.find('h3') or item.find('h5') or item.find('a', class_='manga-name')
+            if title_tag and title_tag.find('a'): title_tag = title_tag.find('a')
+            
             img_tag = item.find('img')
-            chapter_tag = item.find('span', class_='chapter')
-            time_tag = item.find('span', class_='post-on')
+            chapter_tag = item.find('span', class_='chapter') or item.find('div', class_='chapter-item')
+            time_tag = item.find('span', class_='post-on') or item.find('span', class_='post-date')
             
-            if not title_tag: continue
+            if not title_tag or not title_tag.get('href'): continue
             
-            poster_url = img_tag['data-src'] if img_tag and 'data-src' in img_tag.attrs else (img_tag['src'] if img_tag else "")
+            poster_url = img_tag.get('data-src') or img_tag.get('src') if img_tag else ""
             
             results.append({
                 "title": title_tag.text.strip(),
@@ -116,7 +122,16 @@ def latest_manga():
                 "latest_chapter": chapter_tag.text.strip() if chapter_tag else "Ch. 1",
                 "time": time_tag.text.strip() if time_tag else ""
             })
-        return jsonify({"success": True, "results": results})
+        
+        # Deduplicate results by slug
+        seen = set()
+        final_results = []
+        for r in results:
+            if r['slug'] not in seen:
+                seen.add(r['slug'])
+                final_results.append(r)
+                
+        return jsonify({"success": True, "results": final_results})
     except Exception as e: return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/manga/trending', methods=['GET'])
