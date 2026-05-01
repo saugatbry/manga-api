@@ -152,4 +152,45 @@ def fetch_images():
 def get_genres():
     return jsonify({"success": True, "genres": ["Action", "Adventure", "Comedy", "Drama", "Ecchi", "Fantasy", "Harem", "Historical", "Horror", "Isekai", "Josei", "Martial Arts", "Mature", "Mecha", "Mystery", "Psychological", "Romance", "School Life", "Sci-fi", "Seinen", "Shoujo", "Shounen", "Slice of Life", "Sports", "Supernatural", "Tragedy", "Webtoon"]})
 
+@app.route('/api/manga/info', methods=['GET'])
+def manga_info():
+    name = request.args.get('name')
+    if not name: return jsonify({"error": "Manga name is required"}), 400
+    url = f"https://www.mangaread.org/manga/{name}/"
+    try:
+        response = session.get(url, timeout=15)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        info = {
+            "title": soup.select_one('.post-title h1').text.strip() if soup.select_one('.post-title h1') else name.replace('-', ' ').title(),
+            "description": soup.select_one('.description-summary .summary__content').text.strip() if soup.select_one('.description-summary .summary__content') else "No description available.",
+            "poster": fix_poster(soup.select_one('.summary_image img').get('data-src') or soup.select_one('.summary_image img').get('src') if soup.select_one('.summary_image img') else ""),
+            "rating": soup.select_one('#averagerate').text.strip() if soup.select_one('#averagerate') else "4.5",
+            "status": "Ongoing",
+            "alternative": "N/A",
+            "author": "N/A",
+            "artist": "N/A",
+            "genres": [],
+            "type": "Manga",
+            "release": "N/A"
+        }
+
+        # Detailed metadata extraction
+        meta_items = soup.select('.post-content_item')
+        for item in meta_items:
+            heading = item.select_one('.summary-heading').text.strip().lower()
+            content = item.select_one('.summary-content')
+            if not content: continue
+            
+            if 'alt' in heading: info['alternative'] = content.text.strip()
+            elif 'author' in heading: info['author'] = content.text.strip()
+            elif 'artist' in heading: info['artist'] = content.text.strip()
+            elif 'genre' in heading: info['genres'] = [a.text.strip() for a in content.find_all('a')]
+            elif 'type' in heading: info['type'] = content.text.strip()
+            elif 'status' in heading: info['status'] = content.text.strip()
+            elif 'release' in heading: info['release'] = content.text.strip()
+
+        return jsonify({"success": True, "info": info})
+    except Exception as e: return jsonify({"success": False, "error": str(e)}), 500
+
 app = app
