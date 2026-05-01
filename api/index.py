@@ -77,19 +77,35 @@ def fix_poster(url):
 
 @app.route('/api/manga/latest', methods=['GET'])
 def latest_manga():
-    url = "https://www.mangaread.org/"
+    orderby = request.args.get('orderby', '')
+    genre = request.args.get('genre', '')
+    
+    # Construct target URL
+    if genre:
+        url = f"https://www.mangaread.org/manga-genre/{genre}/"
+        if orderby: url += f"?m_orderby={orderby}"
+    else:
+        url = "https://www.mangaread.org/manga/"
+        if orderby: url += f"?m_orderby={orderby}"
+        
     headers = {'User-Agent': 'Mozilla/5.0'}
     try:
         response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, 'html.parser')
         results = []
         
+        # Determine items based on page structure
         items = soup.find_all('div', class_='page-item-detail')
+        if not items:
+            items = soup.find_all('div', class_='manga-item') # Fallback for some genre pages
+            
         for item in items:
-            title_tag = item.find('h3', class_='h5').find('a')
+            title_tag = item.find('h3').find('a') if item.find('h3') else item.find('a')
             img_tag = item.find('img')
             chapter_tag = item.find('span', class_='chapter')
             time_tag = item.find('span', class_='post-on')
+            
+            if not title_tag: continue
             
             poster_url = img_tag['data-src'] if img_tag and 'data-src' in img_tag.attrs else (img_tag['src'] if img_tag else "")
             
