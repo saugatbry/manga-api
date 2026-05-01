@@ -2,6 +2,7 @@ from flask import Flask, jsonify, request
 import os
 import sys
 import requests
+import re
 from bs4 import BeautifulSoup
 
 # Add parent directory to path to import manga_scrape
@@ -51,21 +52,33 @@ def fetch_images():
 def search_manga():
     query = request.args.get('q')
     if not query: return jsonify({"success": False, "error": "Query is required"}), 400
+    
     url = f"https://www.mangaread.org/?s={query}&post_type=wp-manga"
-    headers = {'User-Agent': 'Mozilla/5.0'}
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://www.google.com/'
+    }
     try:
         response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, 'html.parser')
         results = []
-        items = soup.find_all('div', class_='c-tabs-item__content')
+        
+        items = soup.select('div.c-tabs-item__content, div.page-item-detail')
         for item in items:
-            title_tag = item.find('h3', class_='h4').find('a')
+            title_tag = item.select_one('h3 a, h4 a, h5 a, .post-title a')
             img_tag = item.find('img')
+            chapter_tag = item.select_one('span.chapter a, .font-meta a, .latest-chap a')
+            
+            if not title_tag: continue
+            
+            poster_url = img_tag.get('data-src') or img_tag.get('src') or img_tag.get('data-srcset') if img_tag else ""
+            if ' ' in poster_url: poster_url = poster_url.split(' ')[0]
+            
             results.append({
                 "title": title_tag.text.strip(),
                 "slug": title_tag['href'].strip('/').split('/')[-1],
-                "poster": img_tag['src'] if img_tag else "",
-                "latest_chapter": item.find('span', class_='font-meta').text.strip() if item.find('span', class_='font-meta') else ""
+                "poster": fix_poster(poster_url),
+                "latest_chapter": chapter_tag.text.strip() if chapter_tag else ""
             })
         return jsonify({"success": True, "results": results})
     except Exception as e: return jsonify({"success": False, "error": str(e)}), 500
