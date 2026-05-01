@@ -70,6 +70,11 @@ def search_manga():
         return jsonify({"success": True, "results": results})
     except Exception as e: return jsonify({"success": False, "error": str(e)}), 500
 
+def fix_poster(url):
+    if not url: return ""
+    # Remove thumbnail suffixes like -175x238, -110x150, etc.
+    return re.sub(r'-\d+x\d+(\.\w+)$', r'\1', url)
+
 @app.route('/api/manga/latest', methods=['GET'])
 def latest_manga():
     url = "https://www.mangaread.org/"
@@ -86,10 +91,12 @@ def latest_manga():
             chapter_tag = item.find('span', class_='chapter')
             time_tag = item.find('span', class_='post-on')
             
+            poster_url = img_tag['data-src'] if img_tag and 'data-src' in img_tag.attrs else (img_tag['src'] if img_tag else "")
+            
             results.append({
                 "title": title_tag.text.strip(),
                 "slug": title_tag['href'].strip('/').split('/')[-1],
-                "poster": img_tag['data-src'] if img_tag and 'data-src' in img_tag.attrs else (img_tag['src'] if img_tag else ""),
+                "poster": fix_poster(poster_url),
                 "latest_chapter": chapter_tag.text.strip() if chapter_tag else "Ch. 1",
                 "time": time_tag.text.strip() if time_tag else ""
             })
@@ -105,19 +112,25 @@ def trending_manga():
         soup = BeautifulSoup(response.text, 'html.parser')
         results = []
         
-        # Scrape trending from sidebar or popular section
         items = soup.find_all('div', class_='popular-item-wrap')
         for item in items:
             title_tag = item.find('h5').find('a')
             img_tag = item.find('img')
+            poster_url = img_tag['data-src'] if img_tag and 'data-src' in img_tag.attrs else (img_tag['src'] if img_tag else "")
             
             results.append({
                 "title": title_tag.text.strip(),
                 "slug": title_tag['href'].strip('/').split('/')[-1],
-                "poster": img_tag['data-src'] if img_tag and 'data-src' in img_tag.attrs else (img_tag['src'] if img_tag else ""),
+                "poster": fix_poster(poster_url),
             })
         return jsonify({"success": True, "results": results})
     except Exception as e: return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/manga/genres', methods=['GET'])
+def get_genres():
+    # Fixed list of genres from mangaread.org
+    genres = ["Action", "Adventure", "Comedy", "Drama", "Ecchi", "Fantasy", "Gender Bender", "Harem", "Historical", "Horror", "Isekai", "Josei", "Martial Arts", "Mature", "Mecha", "Mystery", "Psychological", "Romance", "School Life", "Sci-fi", "Seinen", "Shoujo", "Shoujo Ai", "Shounen", "Shounen Ai", "Slice of Life", "Smut", "Sports", "Supernatural", "Tragedy", "Webtoon"]
+    return jsonify({"success": True, "genres": genres})
 
 # Export for Vercel
 app = app
