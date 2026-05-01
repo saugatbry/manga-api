@@ -92,6 +92,28 @@ def latest_manga():
 def search_manga():
     return latest_manga()
 
+@app.route('/api/manga/suggestions', methods=['GET'])
+def search_suggestions():
+    query = request.args.get('q')
+    if not query or len(query) < 2: return jsonify({"success": True, "results": []})
+    url = f"https://www.mangaread.org/?s={query}&post_type=wp-manga"
+    try:
+        response = session.get(url, timeout=5)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        results = []
+        items = soup.select('div.c-tabs-item__content, div.page-item-detail')[:5]
+        for item in items:
+            title_tag = item.select_one('.post-title a, h3 a, h4 a, h5 a')
+            if not title_tag: continue
+            img_tag = item.find('img')
+            results.append({
+                "title": title_tag.text.strip(),
+                "slug": title_tag['href'].strip('/').split('/')[-1],
+                "poster": fix_poster(img_tag.get('src') or img_tag.get('data-src') if img_tag else ""),
+            })
+        return jsonify({"success": True, "results": results})
+    except: return jsonify({"success": False, "results": []})
+
 @app.route('/api/manga/trending', methods=['GET'])
 def trending_manga():
     try:
