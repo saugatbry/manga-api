@@ -51,6 +51,7 @@ def latest_manga():
             
             img_tag = item.find('img')
             chapter_link = item.select_one('.chapter a, .list-chapter a')
+            time_tag = item.select_one('.post-on, .post-date, .chapter-release-date')
             
             poster_url = ""
             if img_tag:
@@ -62,7 +63,7 @@ def latest_manga():
                 "slug": title_link['href'].strip('/').split('/')[-1],
                 "poster": fix_poster(poster_url),
                 "latest_chapter": chapter_link.text.strip() if chapter_link else "New",
-                "time": ""
+                "time": time_tag.text.strip() if time_tag else "New"
             })
         
         seen = set()
@@ -131,7 +132,16 @@ def fetch_chapters():
                 slug = a['href'].strip('/').split('/')[-1]
                 num_match = re.search(r'chapter-(\d+(\.\d+)?)', slug)
                 num = num_match.group(1) if num_match else slug.replace('chapter-', '')
-                chapters.append({"number": num, "url": a['href']})
+                
+                # Extract time tag
+                time_tag = item.select_one('.chapter-release-date, .post-on, i')
+                time_text = time_tag.text.strip() if time_tag else "New"
+                
+                chapters.append({
+                    "number": num, 
+                    "url": a['href'],
+                    "time": time_text
+                })
         chapters.reverse() # Story-wise order
         return jsonify({"success": True, "chapters": chapters})
     except Exception as e: return jsonify({"success": False, "error": str(e)}), 500
